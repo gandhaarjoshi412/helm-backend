@@ -1,0 +1,47 @@
+name: Deploy Backend to Server
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Execute Remote Deployment via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script_stop: true
+          script: |
+            set -e
+            echo "🚀 Starting deployment on server..."
+            cd /home/ubuntu/iqoo_backend
+
+            echo "📥 Fetching and resetting to latest origin/main..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "📦 Updating python package..."
+            source venv/bin/activate
+            pip install -e . --no-deps
+
+            echo "🔄 Restarting iqoo-backend systemd service..."
+            sudo systemctl restart iqoo-backend.service
+
+            echo "⏳ Checking service health..."
+            sleep 2
+            sudo systemctl is-active --quiet iqoo-backend.service
+            curl -sSf http://127.0.0.1:8800/health
+
+            echo "✅ Deployment completed successfully!"
