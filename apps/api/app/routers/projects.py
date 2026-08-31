@@ -32,27 +32,34 @@ async def create_project(
     # Strict isolated workspace sandbox path per user and project
     base_ws = Path(settings.WORKSPACE_DIR).resolve()
     ws_dir = base_ws / user_id / project_id
-    ws_dir.mkdir(parents=True, exist_ok=True)
-    repo_path = str(ws_dir)
 
     # If git url provided, clone into the isolated workspace
     git_url = project_in.git_url or (project_in.repo_url if project_in.repo_url and project_in.repo_url.startswith("http") else None)
     if git_url:
+        if ws_dir.exists():
+            shutil.rmtree(ws_dir, ignore_errors=True)
+        ws_dir.mkdir(parents=True, exist_ok=True)
+        repo_path = str(ws_dir)
         try:
             import git
             await asyncio.to_thread(git.Repo.clone_from, git_url, repo_path)
+            logger.info(f"Successfully cloned git repo from {git_url} into {repo_path}")
         except Exception as e:
-            logger.warning(f"Git clone failed for {git_url} ({e}), initializing empty repo in workspace.")
+            logger.warning(f"Git clone failed for {git_url} ({e}), initializing fallback repo in workspace.")
             try:
                 import git
                 repo = git.Repo.init(repo_path)
                 readme = ws_dir / "README.md"
-                readme.write_text(f"# {project_in.name}\n\nWorkspace initialized.\n", encoding="utf-8")
+                readme.write_text(f"# {project_in.name}\n\nCloned from {git_url}\nWorkspace initialized.\n", encoding="utf-8")
                 repo.git.add(A=True)
                 repo.index.commit("Initial commit")
             except Exception:
                 pass
+    elif project_in.repo_path and os.path.exists(project_in.repo_path):
+        repo_path = str(Path(project_in.repo_path).resolve())
     else:
+        ws_dir.mkdir(parents=True, exist_ok=True)
+        repo_path = str(ws_dir)
         # Initialize an empty git repository in the workspace
         try:
             import git
@@ -85,12 +92,13 @@ async def create_project(
         await asyncio.to_thread(indexer.index)
         db_proj.last_indexed_at = utc_now()
         await db.commit()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Project indexing error: {e}")
 
     return ProjectResponse(
         id=db_proj.id,
         name=db_proj.name,
+        git_url=db_proj.repo_url,
         repo_url=db_proj.repo_url,
         repo_path=db_proj.repo_path,
         default_branch=db_proj.default_branch,
@@ -174,6 +182,7 @@ async def create_project_with_files(
     return ProjectResponse(
         id=db_proj.id,
         name=db_proj.name,
+        git_url=db_proj.repo_url,
         repo_url=db_proj.repo_url,
         repo_path=db_proj.repo_path,
         default_branch=db_proj.default_branch,
@@ -201,6 +210,7 @@ async def list_projects(
         ProjectResponse(
             id=p.id,
             name=p.name,
+            git_url=p.repo_url,
             repo_url=p.repo_url,
             repo_path=p.repo_path,
             default_branch=p.default_branch,
@@ -228,6 +238,7 @@ async def get_project(
     return ProjectResponse(
         id=proj.id,
         name=proj.name,
+        git_url=proj.repo_url,
         repo_url=proj.repo_url,
         repo_path=proj.repo_path,
         default_branch=proj.default_branch,

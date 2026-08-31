@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_DEFAULT_RPM: int = 180
     RATE_LIMIT_TASKS_RPM: int = 20
     HELM_API_KEY: str = ""
-    MAX_REQUEST_BODY_BYTES: int = 10 * 1024 * 1024  # 10 MB
+    MAX_REQUEST_BODY_BYTES: int = 200 * 1024 * 1024  # 200 MB
 
     @property
     def cors_origin_list(self) -> List[str]:

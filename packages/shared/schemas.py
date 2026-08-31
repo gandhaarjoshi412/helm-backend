@@ -37,6 +37,7 @@ class TaskStatus(str, Enum):
 
 class ProjectBase(BaseModel):
     name: str
+    git_url: Optional[str] = None
     repo_url: Optional[str] = None
     repo_path: Optional[str] = None
     default_branch: str = "main"
